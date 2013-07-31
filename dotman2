@@ -1,0 +1,136 @@
+#!/bin/bash
+
+usage() {
+cat <<EOF
+usage: dotman.sh [OPTIONS] COMMAND [PROGRAM...]
+
+Manages configuration files (dotfiles) using git.
+
+Command:
+    clone   clones git repo containing dotfiles
+    check   checks dotfile sym-links and copied files
+    deploy  deploys program's dotfiles to user's directory
+    update  update dotfile git repo
+
+General Options:
+    --config, -c    location of dotman config file. Default ~/.config/dotman
+    --home          set an alternative HOME directory
+    --dotfiles      location of dotfile repo. Default dotman_conf/dotfiles
+    --help, -h      show this message
+
+clone:
+    dotman.sh clone [OPTIONS] GIT_URL [BRANCH]
+EOF
+}
+
+err() {
+    # Print error message $@
+    echo "$@" >&2
+}
+
+set_var() {
+    # Set value $1 to $2, if not defined
+    eval "$1=\${$1-$2}"
+}
+
+set_defaults() {
+    # Set default values, if not already set
+    set_var XDG_CONFIG_HOME ~/.config
+    set_var DOTMAN_CONFIG_DIR $XDG_CONFIG_HOME/dotman2
+    set_var DOTMAN_CONFIG_FILE $DOTMAN_CONFIG_DIR/config
+    set_var DOTMAN_DOTFILES $DOTMAN_CONFIG_DIR/dotfiles
+}
+
+read_config_file() {
+    # Read configuration file, sets values if not already set
+    local line aline
+    
+    # Check if config file exists
+    if ! [ $DOTMAN_CONFIG_FILE ] || ! [ -e $DOTMAN_CONFIG_FILE ]; then return 1; fi
+
+    while read line; do
+        aline=( $line )
+        # Value in the form "name = value"
+        if (( ${aline[1]} != "=" )); then continue; fi
+        case ${aline[0]} in
+            dotman-conf) set_var DOTMAN_CONFIG_FILE ${aline[2]} ;;
+            dotman-files) set_var DOTMAN_DOTFILES ${aline[2]} ;;
+            *) err "Config file option ${aline[0]} unknown" ;;
+        esac
+    done < $DOTMAN_CONFIG_FILE
+}
+
+parse_args() {
+    # Parse arguments ($@)
+
+    local _args
+    _args=$(getopt -o h -l help,config:,dotfiles:,home: -- $@)
+    if [ $? != 0 ]; then
+        err "Error parsing arguments"
+        usage
+        exit 1
+    fi
+
+    eval set -- "$_args"
+    while true ; do
+        case "$1" in
+            -h|--help) usage ; exit 0 ;;
+            --config)
+                DOTMAIN_CONFIG_HOME="$2"
+                shift 2 ;;
+            --home)
+                HOME="$2"
+                shift 2 ;;
+            --dotfiles)
+                DOTMAN_DOTFILES="$2"
+                shift 2 ;;
+            --) shift ; break ;;
+            *) err "Option $1 not understood" ; exit 1 ;;
+        esac
+    done
+
+    if [ $1 ]; then
+        # Process command
+        dot_cmd=$1
+        shift
+        dot_cmd_args="$@"
+    fi
+}
+
+dotfile-clone() {
+    # Clone dotfile git archive $1. Checkout branch $2 if given
+    if [ -z $1 ] ; then err "Git archive url required"; exit 1; fi
+    # Clone get dotfile archive
+    mkdir -p $(dirname "$DOTMAN_DOTFILES")
+    git clone --recursive $1 $DOTMAN_DOTFILES
+
+    # Checkout different branch if given
+    if [ $2 ] ; then
+        cd $DOTMAN_DOTFILES
+        git checkout -b $2
+    fi
+
+    # Write config file
+    if ! [ -e $DOTMAN_CONFIG_FILE ] ; then
+        mkdir -p $(dirname $DOTMAN_CONFIG_FILE)
+        echo "dotman-files = $DOTMAN_DOTFILES" >> $DOTMAN_CONFIG_FILE
+    fi
+}
+
+# Start program
+parse_args $@
+read_config_file
+set_defaults
+
+case $dot_cmd in
+    clone)
+        dotfile-clone $dot_cmd_args ;;
+    check)
+        err TODO: implement $dot_cmd ;;
+    deploy)
+        err TODO: implement $dot_cmd ;;
+    update)
+        err TODO: implement $dot_cmd ;;
+    *)
+        err "Unknown command $dot_cmd" ;;
+esac
