@@ -97,6 +97,29 @@ parse_args() {
     fi
 }
 
+check_if_files_match() {
+    # Usage: check_if_file_exists SOURCE_FILE DEST_FILE
+    #
+    # Checks if a file exists. If it does, check if the DEST file is a symlink
+    # or is a copy. Returns 0 if file DNE
+
+    local _source=$1
+    local _dest=$2
+
+    # Check if source file exists
+    if [[ ! -a $_source ]]; then return 255; fi
+    # Check if dest file exists, return 0 if it doesn't
+    if [[ ! -a $_dest ]]; then return 0; fi
+    # Check if file is a hardlink of source file
+    if [ $(find $_dest -samefile $_source) ]; then return 2; fi
+    # Check if file is a symlink of source file
+    if [ $(find -L $_dest -samefile $_source) ]; then return 3; fi
+    # Check if contents are the same
+    if cmp -s $_source $_dest; then return 4; fi
+    # dest file exists and is different
+    return 5
+} 
+
 dotfile-clone() {
     # Clone dotfile git archive $1. Checkout branch $2 if given
     if [ -z $1 ] ; then err "Git archive url required"; exit 1; fi
