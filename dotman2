@@ -16,6 +16,7 @@ General Options:
     --config, -c    location of dotman config file. Default ~/.config/dotman
     --home          set an alternative HOME directory
     --dotfiles      location of dotfile repo. Default dotman_conf/dotfiles
+    --verbose, -v   increase verboseness, can be used multiple time
     --help, -h      show this message
 
 clone:
@@ -26,6 +27,11 @@ EOF
 err() {
     # Print error message $@
     echo "$@" >&2
+}
+
+log() {
+    # Print message if verboseness is larger then $1
+    if (( $1 <= $VERBOSE_LEVEL )); then shift; echo $@; fi
 }
 
 set_var() {
@@ -39,6 +45,7 @@ set_defaults() {
     set_var DOTMAN_CONFIG_DIR $XDG_CONFIG_HOME/dotman2
     set_var DOTMAN_CONFIG_FILE $DOTMAN_CONFIG_DIR/config
     set_var DOTMAN_DOTFILES $DOTMAN_CONFIG_DIR/dotfiles
+    set_var VERBOSE_LEVEL = 0
 }
 
 read_config_file() {
@@ -64,7 +71,7 @@ parse_args() {
     # Parse arguments ($@)
 
     local _args
-    _args=$(getopt -o h -l help,config:,dotfiles:,home: -- $@)
+    _args=$(getopt -o hv -l help,config:,dotfiles:,home:,verbose -- $@)
     if [ $? != 0 ]; then
         err "Error parsing arguments"
         usage
@@ -84,6 +91,9 @@ parse_args() {
             --dotfiles)
                 DOTMAN_DOTFILES="$2"
                 shift 2 ;;
+            --verbose|-a)
+                (( VERBOSE_LEVEL += 1 ))
+                shift ;;
             --) shift ; break ;;
             *) err "Option $1 not understood" ; exit 1 ;;
         esac
