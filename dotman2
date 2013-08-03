@@ -130,6 +130,26 @@ check_if_files_match() {
     return 5
 } 
 
+print_file_check_err() {
+    # Usage: print_dotfile_err ERRNUM SOURCE_FILE DEST_FILE
+    #
+    # Prints error message related to return value from check_if_files_match
+
+    local _errnum=$1
+    local _source=$2
+    local _dest=$3
+
+    case $_errnum in
+      255) echo Original file $_source does not exist ;;
+      0) echo Config file $_dest does not exist ;;
+      2) echo $_source and $_dest are hardlinks ;;
+      3) echo $_dest is a symlink to $_source ;;
+      4) echo $_source and $_dest are diffrent files, but are identical ;;
+      5) echo $_source and $_dest are diffrent ;;
+      *) echo Unknown error $_errnum ;;
+    esac
+}
+
 dotfile-clone() {
     # Clone dotfile git archive $1. Checkout branch $2 if given
     if [ -z $1 ] ; then err "Git archive url required"; exit 1; fi
