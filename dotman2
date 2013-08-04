@@ -269,6 +269,7 @@ dotfile-clone() {
     # Checkout different branch if given
     if [ $2 ] ; then
         cd $DOTMAN_DOTFILES
+        log 1 Checkout branch $2
         git checkout -b $2
     fi
 
