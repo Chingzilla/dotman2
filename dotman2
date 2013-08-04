@@ -21,6 +21,11 @@ General Options:
 
 clone:
     dotman.sh clone [OPTIONS] GIT_URL [BRANCH]
+
+deploy:
+    dotman.sh deploy [OPTIONS] PROGRAM [PROGRAM...]
+
+    --all, -a       Deploy all files found in .dotfiles files in git repo
 EOF
 }
 
@@ -71,7 +76,7 @@ parse_args() {
     # Parse arguments ($@)
 
     local _args
-    _args=$(getopt -o hv -l help,config:,dotfiles:,home:,verbose -- $@)
+    _args=$(getopt -o hav -l help,config:,dotfiles:,home:,all,verbose -- $@)
     if [ $? != 0 ]; then
         err "Error parsing arguments"
         usage
@@ -91,8 +96,11 @@ parse_args() {
             --dotfiles)
                 DOTMAN_DOTFILES="$2"
                 shift 2 ;;
-            --verbose|-a)
+            --verbose|-v)
                 (( VERBOSE_LEVEL += 1 ))
+                shift ;;
+            --all|-a)
+                ALL_PROGRAMS=1
                 shift ;;
             --) shift ; break ;;
             *) err "Option $1 not understood" ; exit 1 ;;
@@ -150,6 +158,107 @@ print_file_check_err() {
     esac
 }
 
+link_dotfile() {
+    # Usage: link_dotfile SOURCE_FILE DEST_FILE
+    #
+    # Creates symlink if file DNE. returns error if failed
+
+    local _source=$( realpath $1 )
+    local _dest=$( realpath -m $2 )
+
+    check_if_files_match $_source $_dest
+    local _rval=$?
+
+    case $_rval in
+      0)
+        echo "Creating symlink $_source -> $_dest"
+        mkdir -p $(dirname $_dest)
+        ln -s $_source $_dest
+        return ;;
+      3)
+        echo "Symlink $_source -> $_dest already exists" ;;
+      *)
+        print_file_check_err $_rval $_source $_dest
+        return $_rval ;;
+    esac
+}
+
+copy_dotfile() {
+    # Usage: copy_dotfile SOURCE_FILE DEST_FILE
+    #
+    # Copies file
+
+    local _source=$( realpath $1 )
+    local _dest=$( realpath -m $2 )
+
+    check_if_files_match $_source $_dest
+    local _rval=$?
+
+    case $_rval in
+      0)
+        log 1 Copying $_source to $_dest
+        mkdir -p $(dirname $_dest)
+        cp $_source $_dest
+        return $? ;;
+      5)
+        log 1 Files $_source and $_dest are diffrent
+        log 2 -------------------------------------
+        if (( 2 <= $VERBOSE_LEVEL )); then diff -s $_source $_dest; fi
+        log 2 -------------------------------------;;
+      *)
+        print_file_check_err $_rval $_source $_dest
+        return $_rval ;;
+    esac
+}
+
+process_dotfile() {
+    # Usage: process_dotfile PROGRAM
+    #
+    # Reads thought ./PROGRAM.dotfiles and preform the action on each line
+    local PROGRAM=$1
+
+    log 1 "Deploying program $PROGRAM"
+
+    if ! [ -e $PROGRAM.dotfiles ]; then
+        err "Program $PROGRAM does not have a .dotfiles file"
+        return 1
+    fi
+
+    local line
+    while read line; do
+        eval set -- "$line"
+        case $1 in
+            "") ;; # Black line or comment
+            copy) copy_dotfile $2 $3 ;;
+            link) link_dotfile $2 $3 ;;
+            *) err "Command '$line' not understood" ;;
+        esac
+    done < $PROGRAM.dotfiles
+}
+
+dotfile-deploy() {
+    # Usage: dotfile-deploy [PROGRAM [...]]
+    #
+    # Deploy dotfils using commands found in PROGRAM/PROGRAM.dotfiles file
+    local _progs=( $@ )
+
+    cd $DOTMAN_DOTFILES
+
+    if [ $ALL_PROGRAMS ]; then
+        local dot_prog
+        for dot_prog in */*.dotfiles; do
+            _progs+=("${dot_prog%/*}")
+            log 2 "Adding program ${_progs[-1]} to list"
+        done
+    fi
+
+    local program
+    for program in ${_progs[@]}; do
+        cd ${DOTMAN_DOTFILES}/$program
+        process_dotfile $program
+    done
+}
+
 dotfile-clone() {
     # Clone dotfile git archive $1. Checkout branch $2 if given
     if [ -z $1 ] ; then err "Git archive url required"; exit 1; fi
@@ -176,14 +285,9 @@ read_config_file
 set_defaults
 
 case $dot_cmd in
-    clone)
-        dotfile-clone $dot_cmd_args ;;
-    check)
-        err TODO: implement $dot_cmd ;;
-    deploy)
-        err TODO: implement $dot_cmd ;;
-    update)
-        err TODO: implement $dot_cmd ;;
-    *)
-        err "Unknown command $dot_cmd" ;;
+    clone)  dotfile-clone $dot_cmd_args ;;
+    heck)   err TODO: implement $dot_cmd ;;
+    deploy) dotfile-deploy $dot_cmd_args ;;
+    update) err TODO: implement $dot_cmd ;;
+    *)      err "Unknown command $dot_cmd" ;;
 esac
